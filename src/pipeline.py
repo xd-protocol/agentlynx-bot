@@ -80,15 +80,13 @@ class Pipeline:
 
 
 def main():
-    from anthropic import Anthropic
     from src.telegram_bot import TelegramNotifier
 
     config = Config()
     db = Database(url=config.supabase_url, key=config.supabase_key)
     fetcher = Fetcher(twitter_env=config.twitter_env)
-    anthropic_client = Anthropic(api_key=config.anthropic_api_key)
-    filters = Filters(db=db, fetcher=fetcher, anthropic_client=anthropic_client)
-    generator = ReplyGenerator(anthropic_client=anthropic_client)
+    filters = Filters(db=db, fetcher=fetcher)
+    generator = ReplyGenerator()
     poster = Poster(twitter_env=config.twitter_env)
     telegram = TelegramNotifier(token=config.telegram_bot_token, chat_id=config.telegram_chat_id)
 
