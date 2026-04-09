@@ -17,6 +17,7 @@ from src.generator import ReplyGenerator
 from src.poster import Poster
 from src.telegram_bot import TelegramReviewBot
 from src.pipeline import Pipeline
+from src.tweeter import StatsCollector, Tweeter
 
 
 def main():
@@ -33,9 +34,12 @@ def main():
     poster = Poster(twitter_env=config.twitter_env)
     telegram = TelegramReviewBot(config.telegram_bot_token, config.telegram_chat_id, db, poster)
 
+    stats_collector = StatsCollector(Config.AGENTLYNX_API_URL)
+    tweeter = Tweeter(stats_collector=stats_collector, poster=poster, telegram=telegram, db=db)
+
     pipeline = Pipeline(
         db=db, fetcher=fetcher, filters=filters,
-        generator=generator, telegram=telegram,
+        generator=generator, telegram=telegram, tweeter=tweeter,
     )
     stats = pipeline.run()
     print(f"Pipeline complete: {stats}")

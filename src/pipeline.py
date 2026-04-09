@@ -7,18 +7,20 @@ from src.fetcher import Fetcher
 from src.filters import Filters
 from src.generator import ReplyGenerator
 from src.poster import Poster
+from src.tweeter import Tweeter
 
 logger = logging.getLogger(__name__)
 
 
 class Pipeline:
-    def __init__(self, db: Database, fetcher: Fetcher, filters: Filters, generator: ReplyGenerator, poster: Poster, telegram):
+    def __init__(self, db: Database, fetcher: Fetcher, filters: Filters, generator: ReplyGenerator, poster: Poster, telegram, tweeter: Tweeter = None):
         self.db = db
         self.fetcher = fetcher
         self.filters = filters
         self.generator = generator
         self.poster = poster
         self.telegram = telegram
+        self.tweeter = tweeter
 
     def run(self) -> dict:
         stats = {"fetched": 0, "filtered": 0, "posted": 0, "skipped": 0}
@@ -75,8 +77,14 @@ class Pipeline:
             else:
                 stats["skipped"] += 1
 
+        stats["tweeter"] = self.run_tweeter()
         logger.info("Pipeline run complete: %s", stats)
         return stats
+
+    def run_tweeter(self) -> dict:
+        if not self.tweeter:
+            return {"skipped_reason": "tweeter_not_configured"}
+        return self.tweeter.run()
 
 
 def main():

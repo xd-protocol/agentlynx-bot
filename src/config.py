@@ -6,9 +6,11 @@ load_dotenv()
 
 class Config:
     DAILY_REPLY_CAP = 10
+    DAILY_TWEET_CAP = 2
     MIN_FOLLOWERS = 1000
     MAX_FOLLOWERS = 100000
     CRON_INTERVAL_HOURS = 2
+    AGENTLYNX_API_URL = "https://agentlynx.org"
 
     def __init__(self):
         self.twitter_auth_token = os.environ["TWITTER_AUTH_TOKEN"]

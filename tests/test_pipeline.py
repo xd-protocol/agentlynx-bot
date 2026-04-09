@@ -84,3 +84,12 @@ def test_run_notifies_telegram_on_success():
     pipeline = _make_pipeline()
     pipeline.run()
     pipeline.telegram.notify_reply.assert_called_once()
+
+
+def test_pipeline_runs_tweeter():
+    p = _make_pipeline()
+    p.tweeter = MagicMock()
+    p.tweeter.run.return_value = {"tweets_generated": 1}
+    result = p.run()
+    assert result["tweeter"]["tweets_generated"] == 1
+    p.tweeter.run.assert_called_once()
