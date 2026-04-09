@@ -1,12 +1,12 @@
--- monitored_keywords
+-- Bot: monitored keywords for tweet search
 create table if not exists monitored_keywords (
   id uuid primary key default gen_random_uuid(),
-  keyword text not null,
+  keyword text not null unique,
   is_active boolean not null default true,
   created_at timestamptz not null default now()
 );
 
--- monitored_accounts
+-- Bot: monitored accounts for tweet monitoring
 create table if not exists monitored_accounts (
   id uuid primary key default gen_random_uuid(),
   username text not null unique,
@@ -14,7 +14,7 @@ create table if not exists monitored_accounts (
   created_at timestamptz not null default now()
 );
 
--- account_cache
+-- Bot: account classification cache
 create table if not exists account_cache (
   username text primary key,
   account_type text not null,
@@ -23,7 +23,7 @@ create table if not exists account_cache (
   classified_at timestamptz not null default now()
 );
 
--- tweets
+-- Bot: collected tweets
 create table if not exists tweets (
   id uuid primary key default gen_random_uuid(),
   tweet_id text not null unique,
@@ -37,19 +37,21 @@ create table if not exists tweets (
   fetched_at timestamptz not null default now()
 );
 
--- replies
+-- Bot: generated replies and original tweets
 create table if not exists replies (
   id uuid primary key default gen_random_uuid(),
-  tweet_id text not null references tweets(tweet_id),
+  tweet_id text not null,
   draft_text text not null,
   final_text text,
   status text not null default 'pending',
+  source_type text default 'reply',
   reviewed_at timestamptz,
   posted_at timestamptz,
   created_at timestamptz not null default now()
 );
 
--- indexes
+-- Indexes
 create index if not exists idx_tweets_tweet_id on tweets(tweet_id);
 create index if not exists idx_replies_status on replies(status);
 create index if not exists idx_replies_posted_at on replies(posted_at);
+create index if not exists idx_replies_source_type on replies(source_type);
