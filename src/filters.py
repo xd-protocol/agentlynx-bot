@@ -1,4 +1,4 @@
-from anthropic import Anthropic
+import subprocess
 from src.config import Config
 from src.db import Database
 from src.fetcher import Fetcher
@@ -24,10 +24,9 @@ Reply with ONLY "relevant" or "irrelevant"."""
 
 
 class Filters:
-    def __init__(self, db: Database, fetcher: Fetcher, anthropic_client: Anthropic):
+    def __init__(self, db: Database, fetcher: Fetcher):
         self.db = db
         self.fetcher = fetcher
-        self.anthropic_client = anthropic_client
 
     def dedup(self, tweets: list[dict]) -> list[dict]:
         return [t for t in tweets if not self.db.is_tweet_seen(t["tweet_id"])]
@@ -43,8 +42,8 @@ class Filters:
         if not profile:
             return "organization"
         prompt = CLASSIFY_PROMPT.format(username=profile["username"], name=profile["name"], bio=profile["bio"], verified=profile["verified"], followers=profile["followers"])
-        response = self.anthropic_client.messages.create(model="claude-haiku-4-5-20251001", max_tokens=10, messages=[{"role": "user", "content": prompt}])
-        account_type = response.content[0].text.strip().lower()
+        result = subprocess.run(["claude", "-p", prompt, "--model", "haiku"], capture_output=True, text=True)
+        account_type = result.stdout.strip().lower()
         if account_type not in ("individual", "organization"):
             account_type = "organization"
         self.db.cache_account(username, account_type, profile["bio"], profile["followers"])
@@ -52,8 +51,8 @@ class Filters:
 
     def check_relevance(self, content: str) -> bool:
         prompt = RELEVANCE_PROMPT.format(content=content)
-        response = self.anthropic_client.messages.create(model="claude-haiku-4-5-20251001", max_tokens=10, messages=[{"role": "user", "content": prompt}])
-        return response.content[0].text.strip().lower() == "relevant"
+        result = subprocess.run(["claude", "-p", prompt, "--model", "haiku"], capture_output=True, text=True)
+        return result.stdout.strip().lower() == "relevant"
 
     def filter_tweet(self, tweet: dict) -> bool:
         username = tweet["author_username"]

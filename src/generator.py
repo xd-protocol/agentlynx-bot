@@ -1,4 +1,4 @@
-from anthropic import Anthropic
+import subprocess
 
 SYSTEM_PROMPT = """You are a crypto-native with deep knowledge of Web3 and AI agents.
 You write helpful, insightful replies to tweets.
@@ -30,13 +30,17 @@ Write a useful reply relevant to this tweet's topic."""
 
 
 class ReplyGenerator:
-    def __init__(self, anthropic_client: Anthropic):
-        self.client = anthropic_client
+    def __init__(self):
+        pass
 
     def generate(self, tweet_content: str, author_username: str, author_bio: str, thread_context: str | None) -> str | None:
-        prompt = USER_PROMPT.format(username=author_username, bio=author_bio, content=tweet_content, thread_context=thread_context or "None")
-        response = self.client.messages.create(model="claude-sonnet-4-6", max_tokens=150, system=SYSTEM_PROMPT, messages=[{"role": "user", "content": prompt}])
-        text = response.content[0].text.strip()
+        user_prompt = USER_PROMPT.format(username=author_username, bio=author_bio, content=tweet_content, thread_context=thread_context or "None")
+        full_prompt = f"{SYSTEM_PROMPT}\n\n{user_prompt}"
+        result = subprocess.run(
+            ["claude", "-p", full_prompt, "--model", "sonnet"],
+            capture_output=True, text=True
+        )
+        text = result.stdout.strip()
         if text.upper() == "SKIP":
             return None
         if len(text) > 280:
