@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import subprocess
@@ -12,67 +13,144 @@ from src.telegram_bot import TelegramReviewBot
 
 logger = logging.getLogger(__name__)
 
-TWEET_PROMPT = """You are the social media voice of a professional AI agent analytics platform.
-Write ONE tweet about on-chain AI agent ecosystem stats.
+CHAIN_NAMES = {1: "Ethereum", 56: "BNB Chain", 143: "Monad", 8453: "Base", 42220: "Celo"}
+CHAIN_SLUGS = {1: "ethereum", 56: "bsc", 8453: "base", 42220: "celo", 143: "monad"}
+
+TWEET_TYPES = ["agent_highlight", "anomaly", "comparison"]
+
+PROMPTS = {
+    "agent_highlight": """You are a crypto-native analyst sharing a standout AI agent's on-chain performance.
+Write ONE tweet highlighting this agent's activity.
 
 Rules:
-- Under 280 characters
-- English only
-- Crypto-native casual tone
-- Include specific numbers from the data
-- No links, no hashtags, no emojis
-- Make it insightful, not just numbers
+- Under 280 characters (URL counts as 23 chars on X)
+- English only, crypto-native casual tone
+- Start with "Agent [name] on [chain]" format
+- Focus on concrete numbers: volume, transactions, P&L
+- End the tweet with the agent's URL on its own line
+- No hashtags, no emojis
+- Never mention any product or service name
+
+Agent data:
+{data_json}
+
+Write the tweet.""",
+
+    "anomaly": """You are a crypto-native analyst who spotted something unusual in on-chain AI agent data.
+Write ONE tweet about an interesting pattern or anomaly you found.
+
+Rules:
+- Under 280 characters (URL counts as 23 chars on X)
+- English only, crypto-native casual tone
+- Refer to agents as "Agent [name] on [chain]" format
+- Highlight what's unusual: sudden spikes, outliers, unexpected behavior
+- Be specific with numbers and comparisons
+- Include the URL of the most notable agent on its own line at the end
+- No hashtags, no emojis
 - Never mention any product or service name
 
 Data:
-{stats_json}
+{data_json}
 
-Write the tweet."""
+Write the tweet.""",
+
+    "comparison": """You are a crypto-native analyst comparing AI agent activity across chains.
+Write ONE tweet with a specific cross-chain or category comparison.
+
+Rules:
+- Under 280 characters
+- English only, crypto-native casual tone
+- Refer to agents as "Agent [name] on [chain]" when mentioning specific agents
+- Compare specific metrics between chains or agent categories
+- Include concrete numbers, ratios, or percentages
+- No links, no hashtags, no emojis
+- Never mention any product or service name
+
+Data:
+{data_json}
+
+Write the tweet.""",
+}
 
 
 class StatsCollector:
     def __init__(self, api_base_url: str):
         self.api_base_url = api_base_url.rstrip("/")
 
-    def fetch_ecosystem_stats(self) -> dict | None:
+    def _get(self, path: str, params: dict | None = None) -> dict | list | None:
         try:
-            resp = requests.get(f"{self.api_base_url}/api/agents/filter-options", timeout=15)
+            resp = requests.get(f"{self.api_base_url}{path}", params=params, timeout=15)
             resp.raise_for_status()
             return resp.json()
         except Exception as e:
-            logger.error("Failed to fetch ecosystem stats: %s", e)
+            logger.error("API request failed %s: %s", path, e)
             return None
+
+    def fetch_ecosystem_stats(self) -> dict | None:
+        return self._get("/api/agents/filter-options")
 
     def fetch_trending_agents(self) -> list | None:
-        try:
-            resp = requests.get(f"{self.api_base_url}/api/agents/suggestions", timeout=15)
-            resp.raise_for_status()
-            data = resp.json()
-            return data if isinstance(data, list) else data.get("data", [])
-        except Exception as e:
-            logger.error("Failed to fetch trending agents: %s", e)
-            return None
+        data = self._get("/api/agents/suggestions")
+        if isinstance(data, list):
+            return data
+        return data.get("data", []) if data else None
 
-    def fetch_top_agents(self) -> list | None:
-        try:
-            resp = requests.get(f"{self.api_base_url}/api/agents", params={"sort": "score", "pageSize": "5"}, timeout=15)
-            resp.raise_for_status()
-            data = resp.json()
-            return data if isinstance(data, list) else data.get("data", [])
-        except Exception as e:
-            logger.error("Failed to fetch top agents: %s", e)
-            return None
+    def fetch_top_agents(self, count: int = 5) -> list | None:
+        data = self._get("/api/agents", {"sort": "score", "pageSize": str(count)})
+        if isinstance(data, list):
+            return data
+        return data.get("data", []) if data else None
 
-    def collect_all(self) -> dict:
+    def fetch_agent_detail(self, chain_id: int, agent_id: str) -> dict | None:
+        return self._get(f"/api/agents/{chain_id}/{agent_id}")
+
+    def collect_for_highlight(self) -> dict | None:
+        trending = self.fetch_trending_agents()
+        if not trending:
+            return None
+        agent = trending[0]
+        chain_id = agent["chain_id"]
+        detail = self.fetch_agent_detail(chain_id, agent["agent_id"])
+        if not detail:
+            return None
+        detail["chain_name"] = CHAIN_NAMES.get(chain_id, f"Chain {chain_id}")
+        slug = CHAIN_SLUGS.get(chain_id, str(chain_id))
+        detail["url"] = f"{self.api_base_url}/agents/{slug}/{agent['agent_id']}"
+        return detail
+
+    def collect_for_anomaly(self) -> dict | None:
+        top = self.fetch_top_agents(10)
+        trending = self.fetch_trending_agents()
+        if not top and not trending:
+            return None
+        agents = top or trending or []
+        for a in agents:
+            chain_id = a.get("chain_id") or a.get("chainId")
+            agent_id = a.get("agent_id") or a.get("agentId")
+            if chain_id and agent_id:
+                slug = CHAIN_SLUGS.get(chain_id, str(chain_id))
+                a["chain_name"] = CHAIN_NAMES.get(chain_id, f"Chain {chain_id}")
+                a["url"] = f"{self.api_base_url}/agents/{slug}/{agent_id}"
+        return {"top_agents": top or [], "trending": trending or []}
+
+    def collect_for_comparison(self) -> dict | None:
+        ecosystem = self.fetch_ecosystem_stats()
+        top = self.fetch_top_agents(10)
+        if not ecosystem:
+            return None
+        chains = ecosystem.get("chains", [])
+        for c in chains:
+            c["name"] = CHAIN_NAMES.get(c.get("id"), f"Chain {c.get('id')}")
         return {
-            "ecosystem": self.fetch_ecosystem_stats(),
-            "trending": self.fetch_trending_agents(),
-            "top_agents": self.fetch_top_agents(),
+            "chains": chains,
+            "serviceTypes": ecosystem.get("serviceTypes", []),
+            "capabilities": ecosystem.get("capabilities", []),
+            "top_agents": top or [],
         }
 
 
 class Tweeter:
-    DAILY_TWEET_CAP = 2
+    DAILY_TWEET_CAP = 3
 
     def __init__(self, stats_collector: StatsCollector, poster: Poster, telegram: TelegramReviewBot, db: Database):
         self.stats = stats_collector
@@ -84,25 +162,48 @@ class Tweeter:
         today = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00+00:00")
         result = (
             self.db.client.table("replies")
-            .select("id")
+            .select("id, draft_text")
             .eq("source_type", "original_tweet")
-            .eq("status", "posted")
-            .gte("posted_at", today)
+            .in_("status", ["posted", "pending"])
+            .gte("created_at", today)
             .execute()
         )
         return len(result.data)
 
-    def generate_tweet(self, stats: dict) -> str | None:
-        prompt = TWEET_PROMPT.format(stats_json=json.dumps(stats, indent=2))
+    def _get_next_tweet_type(self) -> str:
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00+00:00")
+        result = (
+            self.db.client.table("replies")
+            .select("tweet_id")
+            .eq("source_type", "original_tweet")
+            .in_("status", ["posted", "pending"])
+            .gte("created_at", today)
+            .execute()
+        )
+        count = len(result.data)
+        return TWEET_TYPES[count % len(TWEET_TYPES)]
+
+    def _collect_data(self, tweet_type: str) -> dict | None:
+        if tweet_type == "agent_highlight":
+            return self.stats.collect_for_highlight()
+        elif tweet_type == "anomaly":
+            return self.stats.collect_for_anomaly()
+        elif tweet_type == "comparison":
+            return self.stats.collect_for_comparison()
+        return None
+
+    def generate_tweet(self, tweet_type: str, data: dict) -> str | None:
+        prompt = PROMPTS[tweet_type].format(data_json=json.dumps(data, indent=2, default=str))
         result = subprocess.run(
             ["claude", "-p", prompt, "--model", "sonnet"],
             capture_output=True, text=True,
         )
         text = result.stdout.strip()
-        if not text or len(text) > 280:
-            if text and len(text) > 280:
-                text = text[:277] + "..."
-        return text if text else None
+        if not text:
+            return None
+        if len(text) > 280:
+            text = text[:277] + "..."
+        return text
 
     def run(self) -> dict:
         result = {"tweets_generated": 0}
@@ -111,12 +212,13 @@ class Tweeter:
             result["skipped_reason"] = "daily_tweet_cap_reached"
             return result
 
-        stats = self.stats.collect_all()
-        if not any(stats.values()):
-            result["skipped_reason"] = "no_stats_available"
+        tweet_type = self._get_next_tweet_type()
+        data = self._collect_data(tweet_type)
+        if not data:
+            result["skipped_reason"] = "no_data_available"
             return result
 
-        tweet_text = self.generate_tweet(stats)
+        tweet_text = self.generate_tweet(tweet_type, data)
         if not tweet_text:
             result["skipped_reason"] = "generation_failed"
             return result
@@ -134,11 +236,11 @@ class Tweeter:
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
 
-        import asyncio
         asyncio.run(self.telegram.send_review(
-            {"content": "[Original Tweet]", "author_username": "agent_lynx"},
+            {"content": f"[Original Tweet — {tweet_type}]", "author_username": "agent_lynx"},
             tweet_text, tweet_id,
         ))
 
         result["tweets_generated"] = 1
+        result["tweet_type"] = tweet_type
         return result
