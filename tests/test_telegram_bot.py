@@ -1,25 +1,42 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from src.telegram_bot import format_review_message, TelegramReviewBot
 
 
-def test_format_review_message_basic():
-    tweet = {
-        "tweet_id": "123",
-        "content": "AI agents are taking over DeFi",
-        "author_username": "cryptodegen",
-    }
-    draft = "Absolutely, on-chain agents are redefining liquidity management."
-    msg = format_review_message(tweet, draft)
-    assert "cryptodegen" in msg
-    assert "AI agents are taking over DeFi" in msg
-    assert "Absolutely, on-chain agents" in msg
+def test_format_review_message():
+    msg = format_review_message(
+        tweet_content="AI agents are the future of DeFi",
+        author_username="cryptodegen",
+        author_followers=15000,
+        draft_reply="totally agree — the coordination layer between agents is what makes this real",
+        reply_id="abc-123",
+    )
+    assert "@cryptodegen" in msg
+    assert "15,000" in msg
+    assert "AI agents are the future of DeFi" in msg
+    assert "totally agree" in msg
+
+
+def test_format_review_message_truncates_long_tweet():
+    long_tweet = "x" * 500
+    msg = format_review_message(
+        tweet_content=long_tweet,
+        author_username="user",
+        author_followers=5000,
+        draft_reply="reply",
+        reply_id="abc",
+    )
+    assert len(msg) < 2000
 
 
 def test_format_review_message_includes_char_count():
-    tweet = {"tweet_id": "1", "content": "test", "author_username": "user"}
-    draft = "Short reply"
-    msg = format_review_message(tweet, draft)
+    msg = format_review_message(
+        tweet_content="test",
+        author_username="user",
+        author_followers=0,
+        draft_reply="Short reply",
+        reply_id="x",
+    )
     assert "11" in msg  # len("Short reply") == 11
 
 
@@ -40,6 +57,7 @@ def test_telegram_review_bot_init():
 @pytest.mark.asyncio
 async def test_send_review_sends_message():
     mock_db = MagicMock()
+    mock_db.get_cached_account.return_value = {"followers": 8000}
     mock_poster = MagicMock()
     bot = TelegramReviewBot(token="fake_token", chat_id="12345", db=mock_db, poster=mock_poster)
 
@@ -68,7 +86,6 @@ async def test_handle_callback_approve():
     mock_poster.post_reply.return_value = True
     bot = TelegramReviewBot(token="fake_token", chat_id="12345", db=mock_db, poster=mock_poster)
 
-    # Simulate pending state
     bot._pending["r1"] = {
         "tweet_id": "t1",
         "draft": "Great insight on AI agents.",

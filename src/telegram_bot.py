@@ -10,13 +10,15 @@ from src.poster import Poster
 logger = logging.getLogger(__name__)
 
 
-def format_review_message(tweet: dict, draft: str) -> str:
-    char_count = len(draft)
+def format_review_message(tweet_content: str, author_username: str, author_followers: int, draft_reply: str, reply_id: str) -> str:
+    truncated = tweet_content[:300] + "..." if len(tweet_content) > 300 else tweet_content
+    char_count = len(draft_reply)
     return (
-        f"Tweet by @{tweet['author_username']}:\n"
-        f"{tweet['content']}\n\n"
+        f"Tweet by @{author_username} ({author_followers:,} followers):\n"
+        f"{truncated}\n\n"
         f"Draft reply ({char_count}/280):\n"
-        f"{draft}"
+        f"{draft_reply}\n\n"
+        f"ID: {reply_id}"
     )
 
 
@@ -31,7 +33,9 @@ class TelegramReviewBot:
         self._bot = Bot(token=token)
 
     async def send_review(self, tweet: dict, draft: str, reply_id: str) -> None:
-        text = format_review_message(tweet, draft)
+        cached = self.db.get_cached_account(tweet["author_username"])
+        followers = cached["followers"] if cached else 0
+        text = format_review_message(tweet["content"], tweet["author_username"], followers, draft, reply_id)
         keyboard = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton("Approve", callback_data=f"approve:{reply_id}"),
@@ -72,7 +76,7 @@ class TelegramReviewBot:
 
         elif action == "reject":
             self.db.update_reply(reply_id, {"status": "rejected"})
-            await query.edit_message_text(f"Rejected.")
+            await query.edit_message_text("Rejected.")
             del self._pending[reply_id]
 
         elif action == "edit":
@@ -111,4 +115,5 @@ class TelegramReviewBot:
         app = Application.builder().token(self.token).build()
         app.add_handler(CallbackQueryHandler(self.handle_callback))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_edit_text))
+        logger.info("Telegram review bot started")
         app.run_polling()
