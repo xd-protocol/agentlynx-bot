@@ -44,13 +44,13 @@ class Fetcher:
         }
 
     def search_keyword(self, keyword: str, max_results: int = 20) -> list[dict]:
-        logger.info("Searching keyword: %s", keyword)
+        print(f"Searching keyword: {keyword}")
         data = self._run_twitter(["search", keyword, "--lang", "en", "-n", str(max_results)])
-        logger.info("Search result: %s", "ok" if data and data.get("ok") else "failed")
         if not data or not data.get("ok"):
+            logger.error("Search failed for keyword: %s", keyword)
             return []
         tweets = [self._parse_tweet(t, "keyword", keyword) for t in data.get("data", [])]
-        logger.info("Found %d tweets for keyword %s", len(tweets), keyword)
+        print(f"Found {len(tweets)} tweets for keyword {keyword}")
         return tweets
 
     def fetch_account_tweets(self, username: str, max_results: int = 10) -> list[dict]:

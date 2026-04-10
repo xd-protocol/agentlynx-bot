@@ -31,7 +31,7 @@ class Pipeline:
 
         reply_count = self.db.get_today_reply_count()
         if reply_count >= Config.DAILY_REPLY_CAP:
-            logger.info("Daily cap reached (%d). Skipping.", Config.DAILY_REPLY_CAP)
+            print("Daily cap reached (%d). Skipping." % Config.DAILY_REPLY_CAP)
             stats["skipped_reason"] = "daily_cap_reached"
             return stats
 
@@ -45,7 +45,7 @@ class Pipeline:
         # Dedup
         tweets = self.filters.dedup(tweets)
         stats["fetched"] = len(tweets)
-        logger.info("Fetched %d new tweets", len(tweets))
+        print(f"Fetched {len(tweets)} new tweets")
 
         # Filter and generate drafts
         for tweet in tweets:
@@ -92,11 +92,11 @@ class Pipeline:
                 self.telegram.send_result(tweet, reply_text, label)
             )
             stats["drafts_created"] += 1
-            logger.info("Reply %s for tweet %s", label, tweet["tweet_id"])
+            print(f"Reply {label} for tweet {tweet['tweet_id']}")
 
         # Run tweeter
         stats["tweeter"] = self.run_tweeter()
-        logger.info("Pipeline complete: %s", stats)
+        print(f"Pipeline complete: {stats}")
         return stats
 
     def run_tweeter(self) -> dict:

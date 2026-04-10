@@ -1,11 +1,12 @@
 import asyncio
 import json
 import logging
-import subprocess
+import os
 import uuid
 from datetime import datetime, timezone
 
 import requests
+from anthropic import Anthropic
 
 from src.db import Database
 from src.poster import Poster
@@ -158,6 +159,10 @@ class Tweeter:
         self.telegram = telegram
         self.db = db
         self.loop = asyncio.new_event_loop()
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise ValueError("ANTHROPIC_API_KEY environment variable not set")
+        self.client = Anthropic(api_key=api_key)
 
     def _get_today_tweet_count(self) -> int:
         today = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00+00:00")
@@ -195,11 +200,18 @@ class Tweeter:
 
     def generate_tweet(self, tweet_type: str, data: dict) -> str | None:
         prompt = PROMPTS[tweet_type].format(data_json=json.dumps(data, indent=2, default=str))
-        result = subprocess.run(
-            ["claude", "-p", prompt, "--model", "sonnet"],
-            capture_output=True, text=True,
-        )
-        text = result.stdout.strip()
+        try:
+            message = self.client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=1024,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            text = message.content[0].text.strip()
+        except Exception as e:
+            logger.error("Tweet generation failed: %s", e)
+            return None
         if not text:
             return None
         if len(text) > 280:
