@@ -9,6 +9,8 @@ interface TwitterResponse {
     text: string;
     author: { screenName: string };
     metrics: Record<string, unknown>;
+    createdAt?: string;
+    created_at?: string;
   }>;
 }
 

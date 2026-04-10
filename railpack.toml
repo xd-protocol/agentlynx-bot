@@ -2,7 +2,7 @@
 python = "3.13"
 
 [steps.install]
-cmds = ["npm ci", "python3 -m pip install twitter-cli==0.8.5"]
+cmds = ["npm ci", "python3 -m pip install twitter-cli==0.8.5 --break-system-packages"]
 
 [deploy]
 startCommand = "npm run start"
