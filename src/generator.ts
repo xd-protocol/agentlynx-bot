@@ -83,7 +83,7 @@ export class ReplyGenerator {
           return null;
         }
 
-        // Remove preamble
+        // Remove preamble and meta lines
         const lines = text.split('\n');
         let result = text;
         for (let i = 0; i < lines.length; i++) {
@@ -100,6 +100,19 @@ export class ReplyGenerator {
             break;
           }
         }
+
+        // Remove trailing meta lines (character count, notes, etc.)
+        const cleanedLines = result.split('\n').filter((line) => {
+          const l = line.toLowerCase();
+          return !l.match(/^character count:/i) &&
+            !l.match(/^\d+ characters?/i) &&
+            !l.match(/^note:/i) &&
+            !l.match(/^total:/i) &&
+            !l.match(/^length:/i) &&
+            !l.match(/✓/) &&
+            !l.match(/✗/);
+        });
+        result = cleanedLines.join('\n').trim();
 
         // Check 160 character limit
         if (result.length > 160) {

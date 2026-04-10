@@ -270,12 +270,25 @@ export class Tweeter {
           ],
         });
 
-        let text = message.content[0]?.type === 'text' ? message.content[0].text : null;
+        let text = message.content[0]?.type === 'text' ? message.content[0].text.trim() : null;
 
         if (!text) {
           retries++;
           continue;
         }
+
+        // Remove trailing meta lines (character count, notes, etc.)
+        const cleanedLines = text.split('\n').filter((line) => {
+          const l = line.toLowerCase();
+          return !l.match(/^character count:/i) &&
+            !l.match(/^\d+ characters?/i) &&
+            !l.match(/^note:/i) &&
+            !l.match(/^total:/i) &&
+            !l.match(/^length:/i) &&
+            !l.match(/✓/) &&
+            !l.match(/✗/);
+        });
+        text = cleanedLines.join('\n').trim();
 
         // Check 160 character limit
         if (text.length > 160) {
