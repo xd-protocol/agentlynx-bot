@@ -1,4 +1,5 @@
-import subprocess
+import os
+from anthropic import Anthropic
 from src.config import Config
 from src.db import Database
 from src.fetcher import Fetcher
@@ -27,6 +28,10 @@ class Filters:
     def __init__(self, db: Database, fetcher: Fetcher):
         self.db = db
         self.fetcher = fetcher
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise ValueError("ANTHROPIC_API_KEY environment variable not set")
+        self.client = Anthropic(api_key=api_key)
 
     def dedup(self, tweets: list[dict]) -> list[dict]:
         return [t for t in tweets if not self.db.is_tweet_seen(t["tweet_id"])]
@@ -42,8 +47,17 @@ class Filters:
         if not profile:
             return "organization"
         prompt = CLASSIFY_PROMPT.format(username=profile["username"], name=profile["name"], bio=profile["bio"], verified=profile["verified"], followers=profile["followers"])
-        result = subprocess.run(["claude", "-p", prompt, "--model", "haiku"], capture_output=True, text=True)
-        account_type = result.stdout.strip().lower()
+        try:
+            message = self.client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=50,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            account_type = message.content[0].text.strip().lower()
+        except Exception:
+            account_type = "organization"
         if account_type not in ("individual", "organization"):
             account_type = "organization"
         self.db.cache_account(username, account_type, profile["bio"], profile["followers"])
@@ -51,8 +65,18 @@ class Filters:
 
     def check_relevance(self, content: str) -> bool:
         prompt = RELEVANCE_PROMPT.format(content=content)
-        result = subprocess.run(["claude", "-p", prompt, "--model", "haiku"], capture_output=True, text=True)
-        return result.stdout.strip().lower() == "relevant"
+        try:
+            message = self.client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=50,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            response = message.content[0].text.strip().lower()
+            return response == "relevant"
+        except Exception:
+            return False
 
     def filter_tweet(self, tweet: dict) -> bool:
         username = tweet["author_username"]
