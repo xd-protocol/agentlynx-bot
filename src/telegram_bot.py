@@ -8,6 +8,7 @@ from src.db import Database
 from src.poster import Poster
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 def format_review_message(tweet_content: str, author_username: str, author_followers: int, draft_reply: str, reply_id: str, tweet_id: str = None) -> str:
@@ -67,19 +68,24 @@ class TelegramReviewBot:
         query = update.callback_query
         await query.answer()
         action, reply_id = query.data.split(":", 1)
+        logger.debug(f"Callback: action={action}, reply_id={reply_id}")
 
         # Try in-memory first, then fall back to database
         pending = self._pending.get(reply_id)
         if not pending:
+            logger.debug(f"Not in memory, checking database for reply_id={reply_id}")
             # Try to get from database
             reply_data = self.db.get_reply(reply_id)
+            logger.debug(f"Database result: {reply_data}")
             if not reply_data:
+                logger.warning(f"Reply not found in database: {reply_id}")
                 await query.edit_message_text("This review has expired or not found.")
                 return
             pending = {
                 "tweet_id": reply_data.get("tweet_id"),
                 "draft": reply_data.get("draft_text"),
             }
+            logger.debug(f"Loaded from database: {pending}")
 
         if action == "approve":
             success = self.poster.post_reply(pending["tweet_id"], pending["draft"])
