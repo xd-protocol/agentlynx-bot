@@ -46,6 +46,14 @@ class ReplyGenerator:
         text = result.stdout.strip()
         if text.upper() == "SKIP":
             return None
+
+        # Remove preamble like "Here's a reply draft:" if present
+        lines = text.split('\n')
+        for i, line in enumerate(lines):
+            if line.strip() and not any(phrase in line.lower() for phrase in ["here's", "draft", "reply:", "response:", "here:"]):
+                text = '\n'.join(lines[i:]).strip()
+                break
+
         if len(text) > 280:
             text = text[:277] + "..."
         return text
