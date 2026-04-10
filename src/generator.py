@@ -1,5 +1,5 @@
-import subprocess
-import re
+import os
+from anthropic import Anthropic
 
 SYSTEM_PROMPT = """You are a crypto-native with deep knowledge of Web3 and AI agents.
 You write SHORT, PUNCHY, FUNKY replies with NEW perspectives - no boring validation.
@@ -37,16 +37,27 @@ Format: Short punchy lines, line breaks between thoughts, NO PERIODS."""
 
 class ReplyGenerator:
     def __init__(self):
-        pass
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise ValueError("ANTHROPIC_API_KEY environment variable not set")
+        self.client = Anthropic(api_key=api_key)
 
     def generate(self, tweet_content: str, author_username: str, author_bio: str, thread_context: str | None) -> str | None:
         user_prompt = USER_PROMPT.format(username=author_username, bio=author_bio, content=tweet_content, thread_context=thread_context or "None")
-        full_prompt = f"{SYSTEM_PROMPT}\n\n{user_prompt}"
-        result = subprocess.run(
-            ["claude", "-p", full_prompt, "--model", "sonnet"],
-            capture_output=True, text=True
-        )
-        text = result.stdout.strip()
+
+        try:
+            message = self.client.messages.create(
+                model="claude-3-5-haiku-20241022",
+                max_tokens=1024,
+                system=SYSTEM_PROMPT,
+                messages=[
+                    {"role": "user", "content": user_prompt}
+                ]
+            )
+            text = message.content[0].text.strip()
+        except Exception as e:
+            return None
+
         if text.upper() == "SKIP":
             return None
 
