@@ -58,7 +58,7 @@ export class Fetcher {
     }
   }
 
-  private parseTweet(raw: any, sourceType: string, sourceValue: string): FetchedTweet {
+  private parseTweet(raw: any, sourceType: 'keyword' | 'account', sourceValue: string): FetchedTweet {
     return {
       tweet_id: raw.id,
       content: raw.text || '',
@@ -67,6 +67,7 @@ export class Fetcher {
       thread_context: null,
       source_type: sourceType,
       source_value: sourceValue,
+      created_at: raw.createdAt || raw.created_at || new Date().toISOString(),
       fetched_at: new Date().toISOString(),
       metrics: raw.metrics || {},
     };

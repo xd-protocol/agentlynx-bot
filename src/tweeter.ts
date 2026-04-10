@@ -22,58 +22,28 @@ const CHAIN_SLUGS: Record<number, string> = {
 
 const TWEET_TYPES = ['agent_highlight', 'anomaly', 'comparison'];
 
+const SYSTEM_PROMPT = `You are a crypto-native analyst. You write extremely short, punchy tweets.
+HARD LIMIT: Your output must NEVER exceed 160 characters total. No exceptions.
+Style: casual, no hashtags, no URLs, no emojis, no product names.`;
+
 const PROMPTS: Record<string, string> = {
-  agent_highlight: `You are a crypto-native analyst sharing a standout AI agent's on-chain performance.
-Write ONE tweet highlighting this agent's activity.
+  agent_highlight: `Here is agent data: {data_json}
 
-Rules:
-- Under 280 characters (URL counts as 23 chars on X)
-- English only, crypto-native casual tone
-- Start with "Agent [name] on [chain]" format
-- Focus on concrete numbers: volume, transactions, P&L
-- End the tweet with the agent's URL on its own line
-- No hashtags, no emojis
-- Never mention any product or service name
+Write ONE tweet about this agent's on-chain performance. Pick ONE interesting number (volume, P&L, or tx count) and make a punchy observation.
 
-Agent data:
-{data_json}
+HARD LIMIT: 160 characters maximum. Output ONLY the tweet text, nothing else.`,
 
-Write the tweet.`,
+  anomaly: `Here is agent data: {data_json}
 
-  anomaly: `You are a crypto-native analyst who spotted something unusual in on-chain AI agent data.
-Write ONE tweet about an interesting pattern or anomaly you found.
+Write ONE tweet about an unusual pattern you see. Highlight ONE weird finding with a number. Contrarian tone.
 
-Rules:
-- Under 280 characters (URL counts as 23 chars on X)
-- English only, crypto-native casual tone
-- Refer to agents as "Agent [name] on [chain]" format
-- Highlight what's unusual: sudden spikes, outliers, unexpected behavior
-- Be specific with numbers and comparisons
-- Include the URL of the most notable agent on its own line at the end
-- No hashtags, no emojis
-- Never mention any product or service name
+HARD LIMIT: 160 characters maximum. Output ONLY the tweet text, nothing else.`,
 
-Data:
-{data_json}
+  comparison: `Here is agent data: {data_json}
 
-Write the tweet.`,
+Write ONE tweet comparing agent activity across chains. Pick ONE cross-chain stat and make it punchy.
 
-  comparison: `You are a crypto-native analyst comparing AI agent activity across chains.
-Write ONE tweet with a specific cross-chain or category comparison.
-
-Rules:
-- Under 280 characters
-- English only, crypto-native casual tone
-- Refer to agents as "Agent [name] on [chain]" when mentioning specific agents
-- Compare specific metrics between chains or agent categories
-- Include concrete numbers, ratios, or percentages
-- No links, no hashtags, no emojis
-- Never mention any product or service name
-
-Data:
-{data_json}
-
-Write the tweet.`,
+HARD LIMIT: 160 characters maximum. Output ONLY the tweet text, nothing else.`,
 };
 
 interface Agent {
@@ -106,13 +76,23 @@ export class StatsCollector {
         });
       }
 
-      const response = await fetch(url.toString(), { timeout: 15000 });
-      if (!response.ok) {
-        console.error(`[ERROR] API request failed ${path}: ${response.status}`);
-        return null;
-      }
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-      return response.json();
+      try {
+        const response = await fetch(url.toString(), {
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          console.error(`[ERROR] API request failed ${path}: ${response.status}`);
+          return null;
+        }
+
+        return response.json();
+      } finally {
+        clearTimeout(timeoutId);
+      }
     } catch (err) {
       console.error(`[ERROR] API request failed ${path}:`, err);
       return null;
@@ -153,8 +133,12 @@ export class StatsCollector {
     }
 
     const agent = trending[0];
-    const chainId = agent.chain_id || agent.chainId;
-    const agentId = agent.agent_id || agent.agentId;
+    const chainId = (agent.chain_id || agent.chainId) as number | undefined;
+    const agentId = (agent.agent_id || agent.agentId) as string | undefined;
+
+    if (!chainId || !agentId) {
+      return null;
+    }
 
     const detail = await this.fetchAgentDetail(chainId, agentId);
     if (!detail) {
@@ -213,6 +197,12 @@ export class StatsCollector {
   }
 }
 
+interface TweeterResult {
+  tweets_generated: number;
+  skipped_reason?: string;
+  tweet_type?: string;
+}
+
 export class Tweeter {
   private statsCollector: StatsCollector;
   private client: Anthropic;
@@ -233,8 +223,17 @@ export class Tweeter {
     return 0;
   }
 
-  private getNextTweetType(): string {
-    return TWEET_TYPES[Math.floor(Math.random() * TWEET_TYPES.length)];
+  private async getNextTweetType(): Promise<string> {
+    // Get all original tweets from today, count by type
+    // Then return the type with the fewest tweets (or the next in cycle)
+    const now = new Date();
+    const today = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}T00:00:00+00:00`;
+
+    // For simplicity, just cycle through types in order
+    // Get today's tweets and find which type was last
+    const count = await this.getTodayTweetCount();
+    const tweetTypeIndex = count % TWEET_TYPES.length;
+    return TWEET_TYPES[tweetTypeIndex];
   }
 
   private async collectData(tweetType: string): Promise<any> {
@@ -254,37 +253,52 @@ export class Tweeter {
       JSON.stringify(data, null, 2)
     );
 
-    try {
-      const message = await this.client.messages.create({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1024,
-        messages: [
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-      });
+    let retries = 0;
+    const maxRetries = 3;
 
-      let text = message.content[0]?.type === 'text' ? message.content[0].text : null;
+    while (retries < maxRetries) {
+      try {
+        const message = await this.client.messages.create({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 200,
+          system: SYSTEM_PROMPT,
+          messages: [
+            {
+              role: 'user',
+              content: prompt,
+            },
+          ],
+        });
 
-      if (!text) {
-        return null;
+        let text = message.content[0]?.type === 'text' ? message.content[0].text : null;
+
+        if (!text) {
+          retries++;
+          continue;
+        }
+
+        // Check 160 character limit
+        if (text.length > 160) {
+          retries++;
+          console.log(
+            `[INFO] Generated tweet exceeds 160 chars (${text.length}), retrying (${retries}/${maxRetries})...`
+          );
+          continue;
+        }
+
+        return text;
+      } catch (err) {
+        console.error('[ERROR] Tweet generation failed:', err);
+        retries++;
       }
-
-      if (text.length > 280) {
-        text = text.substring(0, 277) + '...';
-      }
-
-      return text;
-    } catch (err) {
-      console.error('[ERROR] Tweet generation failed:', err);
-      return null;
     }
+
+    console.error('[ERROR] Failed to generate valid tweet after retries');
+    return null;
   }
 
-  async run(): Promise<any> {
-    const result = { tweets_generated: 0 };
+  async run(): Promise<TweeterResult> {
+    const result: TweeterResult = { tweets_generated: 0 };
 
     const todayCount = await this.getTodayTweetCount();
     if (todayCount >= this.DAILY_TWEET_CAP) {
@@ -292,7 +306,7 @@ export class Tweeter {
       return result;
     }
 
-    const tweetType = this.getNextTweetType();
+    const tweetType = await this.getNextTweetType();
     const data = await this.collectData(tweetType);
 
     if (!data) {
@@ -327,8 +341,9 @@ export class Tweeter {
         author_username: 'agent_lynx',
         author_bio: '',
         thread_context: null,
-        source_type: 'original',
+        source_type: 'keyword',
         source_value: 'system',
+        created_at: new Date().toISOString(),
         fetched_at: new Date().toISOString(),
         metrics: {},
       },
@@ -337,7 +352,7 @@ export class Tweeter {
     );
 
     result.tweets_generated = 1;
-    (result as any).tweet_type = tweetType;
+    result.tweet_type = tweetType;
     return result;
   }
 }

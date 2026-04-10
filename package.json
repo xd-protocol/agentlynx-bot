@@ -33,6 +33,8 @@
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
+    "@types/node-telegram-bot-api": "^0.64.14",
+    "@types/uuid": "^10.0.0",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"
   }

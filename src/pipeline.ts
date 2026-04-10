@@ -5,6 +5,8 @@ import { filters } from './filters';
 import { generator } from './generator';
 import { poster } from './poster';
 import { telegram } from './telegram';
+import { relevanceScorer } from './relevance-scorer';
+import { Tweeter, StatsCollector } from './tweeter';
 import { config } from './config';
 
 interface PipelineStats {
@@ -16,6 +18,13 @@ interface PipelineStats {
 }
 
 export class Pipeline {
+  private tweeter: Tweeter;
+
+  constructor() {
+    const statsCollector = new StatsCollector(config.agentlynx_api_url);
+    this.tweeter = new Tweeter(statsCollector);
+  }
+
   async run(): Promise<PipelineStats> {
     const stats: PipelineStats = {
       fetched: 0,
@@ -47,63 +56,99 @@ export class Pipeline {
     stats.fetched = dedupTweets.length;
     console.log(`[INFO] Fetched ${dedupTweets.length} new tweets`);
 
-    // Filter and generate drafts
-    for (let i = 0; i < dedupTweets.length; i++) {
-      const tweet = dedupTweets[i];
+    if (dedupTweets.length === 0) {
+      console.log('[INFO] Pipeline complete: no new tweets');
+      return stats;
+    }
 
-      if (replyCount + stats.drafts_created >= config.DAILY_REPLY_CAP) {
-        break;
-      }
+    // Filter tweets: only last 24 hours
+    const now = new Date();
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const recentTweets = dedupTweets.filter((tweet) => {
+      const tweetTime = new Date(tweet.created_at);
+      return tweetTime >= twentyFourHoursAgo;
+    });
 
-      console.log(
-        `[INFO] Processing tweet ${i + 1}/${dedupTweets.length}: ${tweet.tweet_id}`
-      );
+    console.log(`[INFO] Filtered to ${recentTweets.length} tweets from last 24 hours`);
 
-      if (!(await filters.filterTweet(tweet))) {
+    if (recentTweets.length === 0) {
+      console.log('[INFO] No tweets from last 24 hours');
+      stats.skipped = dedupTweets.length;
+      return stats;
+    }
+
+    // Apply additional filters
+    const filteredTweets = [];
+    for (const tweet of recentTweets) {
+      if (await filters.filterTweet(tweet)) {
+        filteredTweets.push(tweet);
+      } else {
         stats.skipped++;
-        console.log('[INFO] Tweet filtered out (relevance/account type)');
-        continue;
       }
+    }
 
-      console.log(`[INFO] Generating reply for tweet ${tweet.tweet_id}`);
-      const replyText = await generator.generate(
-        tweet.content,
-        tweet.author_username,
-        tweet.author_bio,
-        tweet.thread_context
-      );
-      console.log(`[INFO] Reply generated: ${replyText ? replyText.substring(0, 50) : 'None'}`);
+    console.log(`[INFO] Filtered down to ${filteredTweets.length} tweets`);
 
-      if (!replyText) {
-        stats.skipped++;
-        continue;
-      }
+    if (filteredTweets.length === 0) {
+      console.log('[INFO] No tweets passed filtering');
+      return stats;
+    }
 
-      // Save tweet
-      await db.saveTweet(tweet);
+    // Find the single best tweet by relevance score
+    const bestTweet = await relevanceScorer.findBestTweet(filteredTweets);
+    if (!bestTweet) {
+      console.log('[INFO] Could not determine best tweet');
+      return stats;
+    }
 
-      // Post reply immediately
-      const replyId = uuidv4();
-      const success = poster.postReply(tweet.tweet_id, replyText);
+    // Generate and post reply for the best tweet only
+    console.log(`[INFO] Generating reply for best tweet ${bestTweet.tweet_id}`);
+    const replyText = await generator.generate(
+      bestTweet.content,
+      bestTweet.author_username,
+      bestTweet.author_bio,
+      bestTweet.thread_context
+    );
+    console.log(`[INFO] Reply generated: ${replyText ? replyText.substring(0, 50) : 'None'}`);
 
-      // Save reply with status
-      const status: 'posted' | 'failed' = success ? 'posted' : 'failed';
-      await db.saveReply({
-        id: replyId,
-        tweet_id: tweet.tweet_id,
-        draft_text: replyText,
-        final_text: null,
-        status,
-        reviewed_at: null,
-        posted_at: success ? new Date().toISOString() : null,
-        created_at: new Date().toISOString(),
-      });
+    if (!replyText) {
+      stats.skipped++;
+      return stats;
+    }
 
-      // Send result to Telegram
-      const label = success ? '✓ Posted' : '✗ Failed';
-      await telegram.sendResult(tweet, replyText, label);
-      stats.drafts_created++;
-      console.log(`[INFO] Reply ${label} for tweet ${tweet.tweet_id}`);
+    // Save tweet
+    await db.saveTweet(bestTweet);
+
+    // Post reply immediately
+    const replyId = uuidv4();
+    const success = poster.postReply(bestTweet.tweet_id, replyText);
+
+    // Save reply with status
+    const status: 'posted' | 'failed' = success ? 'posted' : 'failed';
+    await db.saveReply({
+      id: replyId,
+      tweet_id: bestTweet.tweet_id,
+      draft_text: replyText,
+      final_text: null,
+      status,
+      reviewed_at: null,
+      posted_at: success ? new Date().toISOString() : null,
+      created_at: new Date().toISOString(),
+    });
+
+    // Send result to Telegram
+    const label = success ? '✓ Posted' : '✗ Failed';
+    await telegram.sendResult(bestTweet, replyText, label);
+    stats.drafts_created++;
+    console.log(`[INFO] Reply ${label} for tweet ${bestTweet.tweet_id}`);
+
+    // Always try to tweet one original tweet (A, B, or C)
+    console.log('[INFO] Running tweeter for original tweet...');
+    try {
+      const tweeterResult = await this.tweeter.run();
+      stats.tweeter = tweeterResult;
+    } catch (err) {
+      console.error('[ERROR] Tweeter failed:', err);
     }
 
     console.log(`[INFO] Pipeline complete: ${JSON.stringify(stats)}`);

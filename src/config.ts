@@ -20,7 +20,7 @@ export const config = {
   agentlynx_api_url: 'https://agentlynx.org',
 
   // Constants
-  DAILY_REPLY_CAP: 10,
+  DAILY_REPLY_CAP: 100,  // Temporarily increased for testing
   DAILY_TWEET_CAP: 3,
   MIN_FOLLOWERS: 1000,
   MAX_FOLLOWERS: 100000,

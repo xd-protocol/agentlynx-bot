@@ -6,6 +6,7 @@ export interface FetchedTweet {
   thread_context: string | null;
   source_type: 'keyword' | 'account';
   source_value: string;
+  created_at: string;
   fetched_at: string;
   metrics: Record<string, unknown>;
 }
