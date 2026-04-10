@@ -1,0 +1,10 @@
+{
+  "active": true,
+  "started_at": "2026-04-09T13:15:22.769Z",
+  "original_prompt": "Classify this X account as \"individual\" or \"organization\".\n\nUsername: @TheoriqAI\nDisplay name: Theoriq\nBio: Home of AlphaVault. Autonomous onchain yield, powered by agent swarms.\n\n👉 https://t.co/9VhJ1Swbil\nVerified: True\nFollowers: 333340\n\n\"individual\" = real person (influencer, developer, researcher, trader, etc.)\n\"organization\" = company, protocol, DAO, VC fund, exchange, lab, foundation, media outlet, bot\n\nReply with ONLY \"individual\" or \"organization\".",
+  "session_id": "22931dcf-7d27-432c-8ba0-2404dd588b06",
+  "project_path": "/home/me/agentlynx-bot",
+  "reinforcement_count": 0,
+  "awaiting_confirmation": true,
+  "last_checked_at": "2026-04-09T13:15:22.769Z"
+}

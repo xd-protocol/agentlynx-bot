@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"rm -rf src .venv run_*.py requirements.txt && pnpm init -y\"}",
+  "error": "Exit code 127\n/usr/bin/bash: line 1: pnpm: command not found",
+  "timestamp": "2026-04-10T10:15:23.093Z",
+  "retry_count": 1
+}

@@ -1,0 +1,139 @@
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { config } from './config';
+import { Tweet, AccountCache, Reply, ReplyStatus } from './types';
+
+export class Database {
+  private client: SupabaseClient;
+
+  constructor(url: string, key: string) {
+    this.client = createClient(url, key);
+  }
+
+  async isTweetSeen(tweetId: string): Promise<boolean> {
+    const { data, error } = await this.client
+      .from('tweets')
+      .select('tweet_id')
+      .eq('tweet_id', tweetId)
+      .limit(1);
+
+    if (error) {
+      console.error('[ERROR] isTweetSeen:', error);
+      return false;
+    }
+    return (data ?? []).length > 0;
+  }
+
+  async saveTweet(tweet: Tweet): Promise<void> {
+    const { error } = await this.client.from('tweets').insert([tweet]);
+    if (error) {
+      console.error('[ERROR] saveTweet:', error);
+    }
+  }
+
+  async getTodayReplyCount(): Promise<number> {
+    const now = new Date();
+    const today = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}T00:00:00+00:00`;
+
+    const { data, error } = await this.client
+      .from('replies')
+      .select('id', { count: 'exact' })
+      .gte('created_at', today)
+      .in('status', ['posted', 'pending']);
+
+    if (error) {
+      console.error('[ERROR] getTodayReplyCount:', error);
+      return 0;
+    }
+    return data?.length ?? 0;
+  }
+
+  async saveReply(reply: Reply): Promise<void> {
+    const { error } = await this.client.from('replies').insert([reply]);
+    if (error) {
+      console.error('[ERROR] saveReply:', error);
+    }
+  }
+
+  async updateReply(replyId: string, updates: Partial<Reply>): Promise<void> {
+    const { error } = await this.client
+      .from('replies')
+      .update(updates)
+      .eq('id', replyId);
+
+    if (error) {
+      console.error('[ERROR] updateReply:', error);
+    }
+  }
+
+  async getReply(replyId: string): Promise<Reply | null> {
+    const { data, error } = await this.client
+      .from('replies')
+      .select('*')
+      .eq('id', replyId)
+      .single();
+
+    if (error) {
+      console.error('[ERROR] getReply:', error);
+      return null;
+    }
+    return data as Reply;
+  }
+
+  async getCachedAccount(username: string): Promise<AccountCache | null> {
+    const { data, error } = await this.client
+      .from('account_cache')
+      .select('*')
+      .eq('username', username)
+      .single();
+
+    if (error) {
+      return null;
+    }
+    return data as AccountCache;
+  }
+
+  async cacheAccount(
+    username: string,
+    accountType: string,
+    bio: string,
+    followers: number
+  ): Promise<void> {
+    const { error } = await this.client
+      .from('account_cache')
+      .upsert([{ username, account_type: accountType, bio, followers }], {
+        onConflict: 'username',
+      });
+
+    if (error) {
+      console.error('[ERROR] cacheAccount:', error);
+    }
+  }
+
+  async getActiveKeywords(): Promise<string[]> {
+    const { data, error } = await this.client
+      .from('monitored_keywords')
+      .select('keyword')
+      .eq('is_active', true);
+
+    if (error) {
+      console.error('[ERROR] getActiveKeywords:', error);
+      return [];
+    }
+    return (data ?? []).map((row: any) => row.keyword);
+  }
+
+  async getActiveAccounts(): Promise<string[]> {
+    const { data, error } = await this.client
+      .from('monitored_accounts')
+      .select('username')
+      .eq('is_active', true);
+
+    if (error) {
+      console.error('[ERROR] getActiveAccounts:', error);
+      return [];
+    }
+    return (data ?? []).map((row: any) => row.username);
+  }
+}
+
+export const db = new Database(config.supabase_url, config.supabase_key);

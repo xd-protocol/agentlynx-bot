@@ -1,6 +1,9 @@
-.venv/
+node_modules/
+dist/
 .env
-__pycache__/
-*.pyc
-.omc/
-logs/
+.env.local
+.env.*.local
+*.log
+.DS_Store
+.idea/
+.vscode/

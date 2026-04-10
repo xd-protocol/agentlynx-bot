@@ -1,0 +1,10 @@
+{
+  "active": true,
+  "started_at": "2026-04-09T13:18:25.331Z",
+  "original_prompt": "Classify this X account as \"individual\" or \"organization\".\n\nUsername: @otonix_tech\nDisplay name: OTONIX\nBio: Infrastructure for Web4 Autonomous Agents. Support by @Clawnch_Bot\n0xF7E2a6226Ffe0693DD85406AC3A8917cbea5DC40\nVerified: True\nFollowers: 882\n\n\"individual\" = real person (influencer, developer, researcher, trader, etc.)\n\"organization\" = company, protocol, DAO, VC fund, exchange, lab, foundation, media outlet, bot\n\nReply with ONLY \"individual\" or \"organization\".",
+  "session_id": "18871fb2-d971-4e87-8a30-c4bcac750937",
+  "project_path": "/home/me/agentlynx-bot",
+  "reinforcement_count": 0,
+  "awaiting_confirmation": true,
+  "last_checked_at": "2026-04-09T13:18:25.334Z"
+}

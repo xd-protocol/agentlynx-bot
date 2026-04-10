@@ -1,0 +1,39 @@
+{
+  "name": "agentlynx-bot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "start": "tsx run_pipeline.ts",
+    "build": "tsc",
+    "dev": "tsx watch run_pipeline.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xd-protocol/agentlynx-bot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/xd-protocol/agentlynx-bot/issues"
+  },
+  "homepage": "https://github.com/xd-protocol/agentlynx-bot#readme",
+  "type": "module",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.87.0",
+    "@supabase/supabase-js": "^2.103.0",
+    "dotenv": "^17.4.1",
+    "node-telegram-bot-api": "^0.67.0",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
+  }
+}
