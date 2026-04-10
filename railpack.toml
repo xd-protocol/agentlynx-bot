@@ -1,0 +1,7 @@
+$schema = "https://schema.railpack.com"
+
+[packages]
+python = "3.13"
+
+[deploy]
+startCommand = "python3 -m pip install twitter-cli==0.8.5 --quiet && npm run start"
