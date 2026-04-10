@@ -160,5 +160,5 @@ class TelegramReviewBot:
         app = Application.builder().token(self.token).build()
         app.add_handler(CallbackQueryHandler(self.handle_callback))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_edit_text))
-        logger.info("Telegram review bot started")
+        print("Telegram review bot started")
         app.run_polling()
