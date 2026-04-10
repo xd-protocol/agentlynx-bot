@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Entry point: runs the tweet collection + reply generation pipeline."""
+"""Entry point for cron: runs the tweet collection + reply generation pipeline."""
 import logging
 import sys
 import os
-import time
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -45,18 +44,8 @@ def main():
         db=db, fetcher=fetcher, filters=filters,
         generator=generator, poster=poster, telegram=telegram, tweeter=tweeter,
     )
-
-    # Run pipeline every 2 hours
-    interval = 2 * 60 * 60  # 2 hours in seconds
-    while True:
-        try:
-            stats = pipeline.run()
-            print(f"Pipeline complete: {stats}")
-        except Exception as e:
-            print(f"Pipeline error: {e}")
-
-        print(f"Next run in 2 hours...")
-        time.sleep(interval)
+    stats = pipeline.run()
+    print(f"Pipeline complete: {stats}")
 
 
 if __name__ == "__main__":
