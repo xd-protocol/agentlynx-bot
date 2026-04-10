@@ -1,2 +1,1 @@
-# Cron job entry point (triggered by external cron scheduler)
-# No long-running processes - everything runs on demand
+web: pip3 install twitter-cli==0.8.5 --quiet && npm run start
