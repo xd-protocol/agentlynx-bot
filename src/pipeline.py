@@ -48,20 +48,24 @@ class Pipeline:
         logger.info("Fetched %d new tweets", len(tweets))
 
         # Filter and generate drafts
-        for tweet in tweets:
+        for i, tweet in enumerate(tweets):
             if reply_count + stats["drafts_created"] >= Config.DAILY_REPLY_CAP:
                 break
 
+            logger.info("Processing tweet %d/%d: %s", i+1, len(tweets), tweet["tweet_id"])
             if not self.filters.filter_tweet(tweet):
                 stats["skipped"] += 1
+                logger.info("Tweet filtered out (relevance/account type)")
                 continue
 
+            logger.info("Generating reply for tweet %s", tweet["tweet_id"])
             reply_text = self.generator.generate(
                 tweet_content=tweet["content"],
                 author_username=tweet["author_username"],
                 author_bio=tweet.get("author_bio", ""),
                 thread_context=tweet.get("thread_context"),
             )
+            logger.info("Reply generated: %s", reply_text[:50] if reply_text else "None")
 
             if reply_text is None:
                 stats["skipped"] += 1

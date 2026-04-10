@@ -1,8 +1,11 @@
+import logging
 import os
 from anthropic import Anthropic
 from src.config import Config
 from src.db import Database
 from src.fetcher import Fetcher
+
+logger = logging.getLogger(__name__)
 
 CLASSIFY_PROMPT = """Classify this X account as "individual" or "organization".
 
@@ -80,12 +83,19 @@ class Filters:
 
     def filter_tweet(self, tweet: dict) -> bool:
         username = tweet["author_username"]
+        logger.info("Classifying account: %s", username)
         account_type = self.classify_account(username)
+        logger.info("Account type: %s", account_type)
         if account_type != "individual":
+            logger.info("Filtered: not individual")
             return False
         cached = self.db.get_cached_account(username)
         if cached and not self.is_within_follower_range(cached["followers"]):
+            logger.info("Filtered: followers out of range (%d)", cached["followers"])
             return False
+        logger.info("Checking relevance for tweet")
         if not self.check_relevance(tweet["content"]):
+            logger.info("Filtered: not relevant")
             return False
+        logger.info("Tweet passed all filters")
         return True
