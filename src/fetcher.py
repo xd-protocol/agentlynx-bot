@@ -1,7 +1,10 @@
 import json
+import logging
 import os
 import subprocess
 from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
 
 
 class Fetcher:
@@ -9,17 +12,21 @@ class Fetcher:
         self.env = {**os.environ, **twitter_env}
 
     def _run_twitter(self, args: list[str]) -> dict | None:
-        result = subprocess.run(
-            ["twitter"] + args + ["--json"],
-            capture_output=True,
-            text=True,
-            env=self.env,
-        )
-        if result.returncode != 0:
-            return None
         try:
-            return json.loads(result.stdout)
-        except json.JSONDecodeError:
+            result = subprocess.run(
+                ["twitter"] + args + ["--json"],
+                capture_output=True,
+                text=True,
+                env=self.env,
+                timeout=30,
+            )
+            if result.returncode != 0:
+                return None
+            try:
+                return json.loads(result.stdout)
+            except json.JSONDecodeError:
+                return None
+        except subprocess.TimeoutExpired:
             return None
 
     def _parse_tweet(self, raw: dict, source_type: str, source_value: str) -> dict:
@@ -37,10 +44,14 @@ class Fetcher:
         }
 
     def search_keyword(self, keyword: str, max_results: int = 20) -> list[dict]:
+        logger.info("Searching keyword: %s", keyword)
         data = self._run_twitter(["search", keyword, "--lang", "en", "-n", str(max_results)])
+        logger.info("Search result: %s", "ok" if data and data.get("ok") else "failed")
         if not data or not data.get("ok"):
             return []
-        return [self._parse_tweet(t, "keyword", keyword) for t in data.get("data", [])]
+        tweets = [self._parse_tweet(t, "keyword", keyword) for t in data.get("data", [])]
+        logger.info("Found %d tweets for keyword %s", len(tweets), keyword)
+        return tweets
 
     def fetch_account_tweets(self, username: str, max_results: int = 10) -> list[dict]:
         data = self._run_twitter(["user-posts", username, "-n", str(max_results)])

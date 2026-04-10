@@ -157,6 +157,7 @@ class Tweeter:
         self.poster = poster
         self.telegram = telegram
         self.db = db
+        self.loop = asyncio.new_event_loop()
 
     def _get_today_tweet_count(self) -> int:
         today = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00+00:00")
@@ -236,8 +237,8 @@ class Tweeter:
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
 
-        asyncio.run(self.telegram.send_review(
-            {"content": f"[Original Tweet — {tweet_type}]", "author_username": "agent_lynx"},
+        self.loop.run_until_complete(self.telegram.send_review(
+            {"tweet_id": tweet_id, "content": f"[Original Tweet — {tweet_type}]", "author_username": "agent_lynx"},
             tweet_text, tweet_id,
         ))
 

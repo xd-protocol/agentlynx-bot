@@ -39,7 +39,7 @@ def main():
 
     pipeline = Pipeline(
         db=db, fetcher=fetcher, filters=filters,
-        generator=generator, telegram=telegram, tweeter=tweeter,
+        generator=generator, poster=poster, telegram=telegram, tweeter=tweeter,
     )
     stats = pipeline.run()
     print(f"Pipeline complete: {stats}")

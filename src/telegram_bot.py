@@ -10,12 +10,21 @@ from src.poster import Poster
 logger = logging.getLogger(__name__)
 
 
-def format_review_message(tweet_content: str, author_username: str, author_followers: int, draft_reply: str, reply_id: str) -> str:
+def format_review_message(tweet_content: str, author_username: str, author_followers: int, draft_reply: str, reply_id: str, tweet_id: str = None) -> str:
     truncated = tweet_content[:300] + "..." if len(tweet_content) > 300 else tweet_content
     char_count = len(draft_reply)
+
+    # Build tweet link - handle both string and int tweet_ids
+    tweet_link = ""
+    if tweet_id:
+        tweet_id_str = str(tweet_id)
+        # Only add link if it looks like a real Twitter ID (numeric, not UUID)
+        if tweet_id_str.isdigit():
+            tweet_link = f"\nhttps://x.com/{author_username}/status/{tweet_id_str}"
+
     return (
         f"Tweet by @{author_username} ({author_followers:,} followers):\n"
-        f"{truncated}\n\n"
+        f"{truncated}{tweet_link}\n\n"
         f"Draft reply ({char_count}/280):\n"
         f"{draft_reply}\n\n"
         f"ID: {reply_id}"
@@ -35,7 +44,7 @@ class TelegramReviewBot:
     async def send_review(self, tweet: dict, draft: str, reply_id: str) -> None:
         cached = self.db.get_cached_account(tweet["author_username"])
         followers = cached["followers"] if cached else 0
-        text = format_review_message(tweet["content"], tweet["author_username"], followers, draft, reply_id)
+        text = format_review_message(tweet["content"], tweet["author_username"], followers, draft, reply_id, tweet.get("tweet_id"))
         keyboard = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton("Approve", callback_data=f"approve:{reply_id}"),
