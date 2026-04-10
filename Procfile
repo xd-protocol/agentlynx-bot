@@ -1,1 +1,2 @@
-web: python run_telegram_bot.py
+# Telegram bot is not needed - Cron job sends results directly via Telegram API
+# All processes are triggered via external cron job scheduler
