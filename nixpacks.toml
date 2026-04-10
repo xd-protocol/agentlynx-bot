@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ["python312", "pip"]
+
+[phases.install]
+cmds = [
+  "npm ci",
+  "pip install twitter-cli==0.8.5"
+]
+
+[start]
+cmd = "npm run start"
