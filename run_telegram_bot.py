@@ -17,9 +17,12 @@ from src.telegram_bot import TelegramReviewBot
 
 def main():
     logging.basicConfig(
-        level=logging.ERROR,
+        level=logging.INFO,
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
     )
+
+    # Suppress httpx INFO logs
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
     config = Config()
     db = Database(config.supabase_url, config.supabase_key)
