@@ -21,6 +21,9 @@ def main():
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
     )
 
+    # Suppress httpx INFO logs
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
     config = Config()
     db = Database(config.supabase_url, config.supabase_key)
     poster = Poster(twitter_env=config.twitter_env)
