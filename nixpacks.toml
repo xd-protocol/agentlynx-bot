@@ -1,10 +1,10 @@
 [phases.setup]
-nixPkgs = ["python312", "pip"]
+nixPkgs = ["nodejs_22", "python312", "python312Packages.pip"]
 
 [phases.install]
 cmds = [
   "npm ci",
-  "pip install twitter-cli==0.8.5"
+  "pip3 install twitter-cli==0.8.5"
 ]
 
 [start]
