@@ -21,10 +21,12 @@ from src.tweeter import StatsCollector, Tweeter
 
 
 def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(name)s %(levelname)s %(message)s",
-    )
+    # Configure logging to write to stderr (so Railway can properly classify levels)
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s"))
+
+    logging.root.setLevel(logging.INFO)
+    logging.root.addHandler(handler)
 
     # Suppress httpx verbose logging
     logging.getLogger("httpx").setLevel(logging.WARNING)
