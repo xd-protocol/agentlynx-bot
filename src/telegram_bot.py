@@ -8,7 +8,6 @@ from src.db import Database
 from src.poster import Poster
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 
 def format_review_message(tweet_content: str, author_username: str, author_followers: int, draft_reply: str, reply_id: str, tweet_id: str = None) -> str:
@@ -160,5 +159,5 @@ class TelegramReviewBot:
         app = Application.builder().token(self.token).build()
         app.add_handler(CallbackQueryHandler(self.handle_callback))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_edit_text))
-        print("Telegram review bot started")
+        logger.info("Telegram review bot started")
         app.run_polling()

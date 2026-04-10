@@ -22,12 +22,12 @@ from src.tweeter import StatsCollector, Tweeter
 
 def main():
     logging.basicConfig(
-        level=logging.ERROR,
+        level=logging.INFO,
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
     )
 
-    # Suppress all loggers except errors
-    logging.getLogger("httpx").setLevel(logging.ERROR)
+    # Suppress httpx verbose logging
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
     config = Config()
     db = Database(config.supabase_url, config.supabase_key)
