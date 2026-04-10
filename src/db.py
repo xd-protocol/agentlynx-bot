@@ -54,3 +54,7 @@ class Database:
     def get_pending_replies(self) -> list[dict]:
         result = self.client.table("replies").select("*").eq("status", "pending").execute()
         return result.data
+
+    def get_reply(self, reply_id: str) -> dict | None:
+        result = self.client.table("replies").select("*").eq("id", reply_id).execute()
+        return result.data[0] if result.data else None

@@ -67,10 +67,19 @@ class TelegramReviewBot:
         query = update.callback_query
         await query.answer()
         action, reply_id = query.data.split(":", 1)
+
+        # Try in-memory first, then fall back to database
         pending = self._pending.get(reply_id)
         if not pending:
-            await query.edit_message_text("This review has expired.")
-            return
+            # Try to get from database
+            reply_data = self.db.get_reply(reply_id)
+            if not reply_data:
+                await query.edit_message_text("This review has expired or not found.")
+                return
+            pending = {
+                "tweet_id": reply_data.get("tweet_id"),
+                "draft": reply_data.get("draft_text"),
+            }
 
         if action == "approve":
             success = self.poster.post_reply(pending["tweet_id"], pending["draft"])
@@ -79,14 +88,16 @@ class TelegramReviewBot:
                 "status": status,
                 "posted_at": datetime.now(timezone.utc).isoformat(),
             })
-            label = "Posted" if success else "Failed to post"
-            await query.edit_message_text(f"{label}: {pending['draft']}")
-            del self._pending[reply_id]
+            label = "Posted ✓" if success else "Failed to post"
+            await query.edit_message_text(f"{label}\n{pending['draft']}")
+            if reply_id in self._pending:
+                del self._pending[reply_id]
 
         elif action == "reject":
             self.db.update_reply(reply_id, {"status": "rejected"})
-            await query.edit_message_text("Rejected.")
-            del self._pending[reply_id]
+            await query.edit_message_text("Rejected ✗")
+            if reply_id in self._pending:
+                del self._pending[reply_id]
 
         elif action == "edit":
             self._awaiting_edit = reply_id
