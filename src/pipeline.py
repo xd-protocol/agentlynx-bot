@@ -71,20 +71,28 @@ class Pipeline:
             tweet_to_save = {k: v for k, v in tweet.items() if k != "metrics"}
             self.db.save_tweet(tweet_to_save)
 
-            # Save reply as pending (NOT posting yet)
+            # Post reply immediately
             reply_id = str(uuid.uuid4())
+            success = self.poster.post_reply(tweet["tweet_id"], reply_text)
+
+            # Save reply with status
+            status = "posted" if success else "failed"
             self.db.save_reply({
                 "id": reply_id,
                 "tweet_id": tweet["tweet_id"],
                 "draft_text": reply_text,
-                "status": "pending",
+                "status": status,
+                "posted_at": datetime.now(timezone.utc).isoformat() if success else None,
                 "created_at": datetime.now(timezone.utc).isoformat(),
             })
 
-            # Send to Telegram for approval
-            self.loop.run_until_complete(self.telegram.send_review(tweet, reply_text, reply_id))
+            # Send result to Telegram
+            label = "✓ Posted" if success else "✗ Failed"
+            self.loop.run_until_complete(
+                self.telegram.send_result(tweet, reply_text, label)
+            )
             stats["drafts_created"] += 1
-            logger.info("Draft created for tweet %s", tweet["tweet_id"])
+            logger.info("Reply %s for tweet %s", label, tweet["tweet_id"])
 
         # Run tweeter
         stats["tweeter"] = self.run_tweeter()

@@ -225,21 +225,24 @@ class Tweeter:
             return result
 
         tweet_id = str(uuid.uuid4())
+        # Post original tweet directly (no review needed)
+        # Note: Original tweets are just notifications, not actual posts
+
         self.db.save_reply({
             "id": tweet_id,
             "tweet_id": tweet_id,
             "draft_text": tweet_text,
             "final_text": None,
-            "status": "pending",
+            "status": "notified",  # Just notified, not posted
             "source_type": "original_tweet",
             "reviewed_at": None,
             "posted_at": None,
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
 
-        self.loop.run_until_complete(self.telegram.send_review(
-            {"tweet_id": tweet_id, "content": f"[Original Tweet — {tweet_type}]", "author_username": "agent_lynx"},
-            tweet_text, tweet_id,
+        self.loop.run_until_complete(self.telegram.send_result(
+            {"content": f"[Original Tweet — {tweet_type}]", "author_username": "agent_lynx"},
+            tweet_text, "📌 Original Tweet"
         ))
 
         result["tweets_generated"] = 1

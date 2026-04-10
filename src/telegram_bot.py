@@ -42,6 +42,25 @@ class TelegramReviewBot:
         self._awaiting_edit: str | None = None
         self._bot = Bot(token=token)
 
+    async def send_result(self, tweet: dict, reply_text: str, status: str) -> None:
+        """Send posting result to Telegram."""
+        cached = self.db.get_cached_account(tweet["author_username"])
+        followers = cached["followers"] if cached else 0
+        truncated = tweet["content"][:200] + "..." if len(tweet["content"]) > 200 else tweet["content"]
+        tweet_link = ""
+        if tweet.get("tweet_id"):
+            tweet_id_str = str(tweet["tweet_id"])
+            if tweet_id_str.isdigit():
+                tweet_link = f"\nhttps://x.com/{tweet['author_username']}/status/{tweet_id_str}"
+
+        text = (
+            f"{status}\n\n"
+            f"@{tweet['author_username']} ({followers:,} followers):\n"
+            f"{truncated}{tweet_link}\n\n"
+            f"Reply:\n{reply_text}"
+        )
+        await self._bot.send_message(chat_id=self.chat_id, text=text)
+
     async def send_review(self, tweet: dict, draft: str, reply_id: str) -> None:
         cached = self.db.get_cached_account(tweet["author_username"])
         followers = cached["followers"] if cached else 0
